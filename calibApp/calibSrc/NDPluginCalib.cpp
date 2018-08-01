@@ -1,5 +1,5 @@
 /*
- * NDPluginEdge.cpp
+ * NDPluginCalib.cpp
  *
  * Image processing plugin
  * Author: Keith Brister
@@ -17,12 +17,12 @@
 #include <iocsh.h>
 
 #include "NDArray.h"
-#include "NDPluginEdge.h"
+#include "NDPluginCalib.h"
 #include <epicsExport.h>
 
 #include <opencv2/opencv.hpp>
 
-static const char *driverName="NDPluginEdge";
+static const char *driverName="NDPluginCalib";
 
 
 /** Color Mode to CV Matrix
@@ -70,7 +70,7 @@ static const char *driverName="NDPluginEdge";
   * Does image processing.
   * \param[in] pArray  The NDArray from the callback.
   */
-void NDPluginEdge::processCallbacks(NDArray *pArray)
+void NDPluginCalib::processCallbacks(NDArray *pArray)
 {
   /* This function does array processing.
    * It is called with the mutex already locked.  It unlocks it during long calculations when private
@@ -91,8 +91,8 @@ void NDPluginEdge::processCallbacks(NDArray *pArray)
 
   static const char* functionName = "processCallbacks";
 
-  getDoubleParam( NDPluginEdgeLowThreshold,   &lowThreshold);
-  getDoubleParam( NDPluginEdgeThresholdRatio, &thresholdRatio);
+  getDoubleParam( NDPluginCalibLowThreshold,   &lowThreshold);
+  getDoubleParam( NDPluginCalibThresholdRatio, &thresholdRatio);
 
   // Mono image is OK
   if (pArray->ndims != 2)
@@ -181,9 +181,9 @@ void NDPluginEdge::processCallbacks(NDArray *pArray)
   }
   edge1 = i;
 
-  setIntegerParam( NDPluginEdgeTopEdgeFound, edge1Found);
+  setIntegerParam( NDPluginCalibTopEdgeFound, edge1Found);
   if( edge1Found)
-    setIntegerParam( NDPluginEdgeTopPixel, edge1);
+    setIntegerParam( NDPluginCalibTopPixel, edge1);
 
   // Maybe find the bottom pixel
   for( i=numRows - 1; i>=0; i--) {
@@ -194,20 +194,20 @@ void NDPluginEdge::processCallbacks(NDArray *pArray)
   }
 
   edge2 = i;
-  setIntegerParam( NDPluginEdgeBottomEdgeFound, edge2Found);
+  setIntegerParam( NDPluginCalibBottomEdgeFound, edge2Found);
   if( edge2Found)
-    setIntegerParam( NDPluginEdgeBottomPixel, edge2);
+    setIntegerParam( NDPluginCalibBottomPixel, edge2);
 
 
   if( edge1Found && edge2Found && edge1 < edge2) {
     // Both edges found and they are not the same
     //
-    setIntegerParam( NDPluginEdgeVerticalFound, 1);
-    setDoubleParam( NDPluginEdgeVerticalCenter, (edge1 + edge2)/2.0);
-    setIntegerParam(    NDPluginEdgeVerticalSize, edge2 - edge1);
+    setIntegerParam( NDPluginCalibVerticalFound, 1);
+    setDoubleParam( NDPluginCalibVerticalCenter, (edge1 + edge2)/2.0);
+    setIntegerParam(    NDPluginCalibVerticalSize, edge2 - edge1);
   } else {
     // no edge found
-    setIntegerParam( NDPluginEdgeVerticalFound, 0);
+    setIntegerParam( NDPluginCalibVerticalFound, 0);
   }
 
   // Find Left pixel
@@ -222,9 +222,9 @@ void NDPluginEdge::processCallbacks(NDArray *pArray)
   }
   edge1 = j;
 
-  setIntegerParam( NDPluginEdgeLeftEdgeFound, edge1Found);
+  setIntegerParam( NDPluginCalibLeftEdgeFound, edge1Found);
   if( edge1Found)
-    setIntegerParam( NDPluginEdgeLeftPixel, edge1);
+    setIntegerParam( NDPluginCalibLeftPixel, edge1);
 
 
   // Maybe find right pixel
@@ -236,17 +236,17 @@ void NDPluginEdge::processCallbacks(NDArray *pArray)
   }
   edge2 = j;
 
-  setIntegerParam( NDPluginEdgeRightEdgeFound, edge2Found);
+  setIntegerParam( NDPluginCalibRightEdgeFound, edge2Found);
   if( edge2Found)
-    setIntegerParam( NDPluginEdgeRightPixel, edge2);
+    setIntegerParam( NDPluginCalibRightPixel, edge2);
 
   if( edge1Found && edge2Found && edge1 < edge2) {
-    setIntegerParam( NDPluginEdgeHorizontalFound, 1);
-    setDoubleParam( NDPluginEdgeHorizontalCenter, (edge1 + edge2)/2.0);
-    setIntegerParam( NDPluginEdgeHorizontalSize, edge2 - edge1);
+    setIntegerParam( NDPluginCalibHorizontalFound, 1);
+    setDoubleParam( NDPluginCalibHorizontalCenter, (edge1 + edge2)/2.0);
+    setIntegerParam( NDPluginCalibHorizontalSize, edge2 - edge1);
   } else {
     // no edge found
-    setIntegerParam( NDPluginEdgeHorizontalFound, 0);
+    setIntegerParam( NDPluginCalibHorizontalFound, 0);
   }
 
   int arrayCallbacks = 0;
@@ -267,7 +267,7 @@ void NDPluginEdge::processCallbacks(NDArray *pArray)
 
 
 
-/** Constructor for NDPluginEdge; most parameters are simply passed to NDPluginDriver::NDPluginDriver.
+/** Constructor for NDPluginCalib; most parameters are simply passed to NDPluginDriver::NDPluginDriver.
  * After calling the base class constructor this method sets reasonable default values for all of the
  * parameters.
  * \param[in] portName The name of the asyn port driver to be created.
@@ -286,7 +286,7 @@ void NDPluginEdge::processCallbacks(NDArray *pArray)
  * \param[in] priority The thread priority for the asyn port driver thread if ASYN_CANBLOCK is set in asynFlags.
  * \param[in] stackSize The stack size for the asyn port driver thread if ASYN_CANBLOCK is set in asynFlags.
  */
-NDPluginEdge::NDPluginEdge(const char *portName, int queueSize, int blockingCallbacks,
+NDPluginCalib::NDPluginCalib(const char *portName, int queueSize, int blockingCallbacks,
     const char *NDArrayPort, int NDArrayAddr,
     int maxBuffers, size_t maxMemory,
     int priority, int stackSize)
@@ -298,31 +298,31 @@ NDPluginEdge::NDPluginEdge(const char *portName, int queueSize, int blockingCall
       0, 1, priority, stackSize, 1)
 {
   char versionString[20];
-  //static const char *functionName = "NDPluginEdge";
+  //static const char *functionName = "NDPluginCalib";
 
-  createParam( NDPluginEdgeLowThresholdString,     asynParamFloat64,  &NDPluginEdgeLowThreshold);
-  createParam( NDPluginEdgeThresholdRatioString,   asynParamFloat64,  &NDPluginEdgeThresholdRatio);
-  createParam( NDPluginEdgeVerticalFoundString,    asynParamInt32,    &NDPluginEdgeVerticalFound);
-  createParam( NDPluginEdgeTopEdgeFoundString,     asynParamInt32,    &NDPluginEdgeTopEdgeFound);
-  createParam( NDPluginEdgeTopPixelString,         asynParamInt32,    &NDPluginEdgeTopPixel);
-  createParam( NDPluginEdgeBottomEdgeFoundString,  asynParamInt32,    &NDPluginEdgeBottomEdgeFound);
-  createParam( NDPluginEdgeBottomPixelString,      asynParamInt32,    &NDPluginEdgeBottomPixel);
-  createParam( NDPluginEdgeVerticalCenterString,   asynParamFloat64,  &NDPluginEdgeVerticalCenter);
-  createParam( NDPluginEdgeVerticalSizeString,     asynParamInt32,    &NDPluginEdgeVerticalSize);
-  createParam( NDPluginEdgeHorizontalFoundString,  asynParamInt32,    &NDPluginEdgeHorizontalFound);
-  createParam( NDPluginEdgeLeftEdgeFoundString,    asynParamInt32,    &NDPluginEdgeLeftEdgeFound);
-  createParam( NDPluginEdgeLeftPixelString,        asynParamInt32,    &NDPluginEdgeLeftPixel);
-  createParam( NDPluginEdgeRightEdgeFoundString,   asynParamInt32,    &NDPluginEdgeRightEdgeFound);
-  createParam( NDPluginEdgeRightPixelString,       asynParamInt32,    &NDPluginEdgeRightPixel);
-  createParam( NDPluginEdgeHorizontalCenterString, asynParamFloat64,  &NDPluginEdgeHorizontalCenter);
-  createParam( NDPluginEdgeHorizontalSizeString,   asynParamInt32,    &NDPluginEdgeHorizontalSize);
+  createParam( NDPluginCalibLowThresholdString,     asynParamFloat64,  &NDPluginCalibLowThreshold);
+  createParam( NDPluginCalibThresholdRatioString,   asynParamFloat64,  &NDPluginCalibThresholdRatio);
+  createParam( NDPluginCalibVerticalFoundString,    asynParamInt32,    &NDPluginCalibVerticalFound);
+  createParam( NDPluginCalibTopEdgeFoundString,     asynParamInt32,    &NDPluginCalibTopEdgeFound);
+  createParam( NDPluginCalibTopPixelString,         asynParamInt32,    &NDPluginCalibTopPixel);
+  createParam( NDPluginCalibBottomEdgeFoundString,  asynParamInt32,    &NDPluginCalibBottomEdgeFound);
+  createParam( NDPluginCalibBottomPixelString,      asynParamInt32,    &NDPluginCalibBottomPixel);
+  createParam( NDPluginCalibVerticalCenterString,   asynParamFloat64,  &NDPluginCalibVerticalCenter);
+  createParam( NDPluginCalibVerticalSizeString,     asynParamInt32,    &NDPluginCalibVerticalSize);
+  createParam( NDPluginCalibHorizontalFoundString,  asynParamInt32,    &NDPluginCalibHorizontalFound);
+  createParam( NDPluginCalibLeftEdgeFoundString,    asynParamInt32,    &NDPluginCalibLeftEdgeFound);
+  createParam( NDPluginCalibLeftPixelString,        asynParamInt32,    &NDPluginCalibLeftPixel);
+  createParam( NDPluginCalibRightEdgeFoundString,   asynParamInt32,    &NDPluginCalibRightEdgeFound);
+  createParam( NDPluginCalibRightPixelString,       asynParamInt32,    &NDPluginCalibRightPixel);
+  createParam( NDPluginCalibHorizontalCenterString, asynParamFloat64,  &NDPluginCalibHorizontalCenter);
+  createParam( NDPluginCalibHorizontalSizeString,   asynParamInt32,    &NDPluginCalibHorizontalSize);
 
 
   /* Set the plugin type string */
-  setStringParam(NDPluginDriverPluginType, "NDPluginEdge");
+  setStringParam(NDPluginDriverPluginType, "NDPluginCalib");
 
   epicsSnprintf(versionString, sizeof(versionString), "%d.%d.%d",
-      EDGE_VERSION, EDGE_REVISION, EDGE_MODIFICATION);
+      CALIB_VERSION, CALIB_REVISION, CALIB_MODIFICATION);
   setStringParam(NDDriverVersion, versionString);
 
   /* Try to connect to the array port */
@@ -330,12 +330,12 @@ NDPluginEdge::NDPluginEdge(const char *portName, int queueSize, int blockingCall
 }
 
 /** Configuration command */
-extern "C" int NDEdgeConfigure(const char *portName, int queueSize, int blockingCallbacks,
+extern "C" int NDCalibConfigure(const char *portName, int queueSize, int blockingCallbacks,
     const char *NDArrayPort, int NDArrayAddr,
     int maxBuffers, size_t maxMemory,
     int priority, int stackSize)
 {
-  NDPluginEdge *pPlugin = new NDPluginEdge(portName, queueSize, blockingCallbacks, NDArrayPort, NDArrayAddr,
+  NDPluginCalib *pPlugin = new NDPluginCalib(portName, queueSize, blockingCallbacks, NDArrayPort, NDArrayAddr,
       maxBuffers, maxMemory, priority, stackSize);
   return pPlugin->start();
 }
@@ -359,19 +359,19 @@ static const iocshArg * const initArgs[] = {&initArg0,
   &initArg6,
   &initArg7,
   &initArg8};
-static const iocshFuncDef initFuncDef = {"NDEdgeConfigure",9,initArgs};
+static const iocshFuncDef initFuncDef = {"NDCalibConfigure",9,initArgs};
 static void initCallFunc(const iocshArgBuf *args)
 {
-  NDEdgeConfigure(args[0].sval, args[1].ival, args[2].ival,
+  NDCalibConfigure(args[0].sval, args[1].ival, args[2].ival,
       args[3].sval, args[4].ival, args[5].ival,
       args[6].ival, args[7].ival, args[8].ival);
 }
 
-extern "C" void NDEdgeRegister(void)
+extern "C" void NDCalibRegister(void)
 {
   iocshRegister(&initFuncDef,initCallFunc);
 }
 
 extern "C" {
-  epicsExportRegistrar(NDEdgeRegister);
+  epicsExportRegistrar(NDCalibRegister);
 }

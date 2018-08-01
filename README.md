@@ -1,32 +1,32 @@
-ADPluginEdge
-============
+ADPluginCalib
+=============
 
-An EPICS areaDetector plugin to perform edge detection using the
-OpenCV Canny function.
+An EPICS areaDetector plugin to perform pixel calibration based on corner
+detection of a square using OpenCV <placeholder> function.
 
 Additional information:
 
 - Documentation.
 
-  This routine finds edges in an image using the Canny algorithm (John
-  Canny. A computational approach to edge detection. Pattern Analysis
-  and Machine Intelligence, IEEE Transactions on, (6):679–698, 1986.)
-  The routine is cool if for no other reason than that the primary
-  source shows an image of a Dalek before and after edge detection.
+  This routine finds edges in an image using the <placeholder> algorithm 
 
+  TODO: Edit this
   There are two parameters: "LowThreshold" and "ThresholdRatio".  Use
   the low threshold to adjust the sensitivity.  Canny suggests that
   the threshold ratio be "two or three to one".
 
+  TODO: Edit this
   To make use of this detector a vertical line is taken midway between
   the left and right edges of the image.  The first edge from the top
   (TopPixel) and the first edge from the bottom (BottomPixel) are
   found TopEdgeFound and BottomEdgeFound.  If the top and bottom edges
   are different then "VerticalFound" is set true.
 
+  TODO: Edit this
   Likewise, a horizontal line is drawn midway between the top and
   bottom edges of the image.
 
+TODO: Edit this
 - Input PVs
 
 PV                 |  Comment
@@ -34,6 +34,7 @@ PV                 |  Comment
 LowThreshold       | Lower values increase the sensitivity of the detector
 ThresholdRatio     | Sets the size of the hysteresis of the edge detector (2 to 3 are reasonable)
 
+TODO: Edit this
 - Output PVs
 
 PV                 |  Comment
@@ -55,6 +56,7 @@ VerticalCenter     | Average of TopPixel and BottomPixel
 VerticalFound      | Indicates that both a top pixel and a bottom pixel were found and they are not the same
 VerticalSize       | Difference between BottomPixel and TopPixel
 
+TODO: Edit this
 - Release notes.
   
   For this implementation the image must be 8 bit monochromatic.

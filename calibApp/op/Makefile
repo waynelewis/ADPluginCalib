@@ -1,10 +1,7 @@
 TOP = ../..
 include $(TOP)/configure/CONFIG
 
-ADL_DIR = adl
-UI_DIR  = ui/autoconvert
-EDL_DIR = edl/autoconvert
-OPI_DIR = opi/autoconvert
+OPI_DIR = opi
 
 include $(CONFIG)/RULES_DIRS
 

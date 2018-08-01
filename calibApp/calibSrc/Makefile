@@ -11,19 +11,19 @@ ifeq (vxWorks,$(findstring vxWorks, $(T_A)))
 CODE_CXXFLAGS=
 endif
 
-DBD += NDPluginEdge.dbd
+DBD += NDPluginCalib.dbd
 
-INC += NDPluginEdge.h
+INC += NDPluginCalib.h
 
-LIBRARY_IOC += NDPluginEdge
+LIBRARY_IOC += NDPluginCalib
 
-NDPluginEdge_SRCS += NDPluginEdge.cpp
+NDPluginCalib_SRCS += NDPluginCalib.cpp
 
 ifdef OPENCV_INCLUDE
   USR_INCLUDES += -I$(OPENCV_INCLUDE)
 endif 
 ifdef OPENCV_LIB
-  NDPluginEdge_DIR += $(OPENCV_LIB)
+  NDPluginCalib_DIR += $(OPENCV_LIB)
 endif
 
 include $(AREA_DETECTOR)/ADCore/ADApp/commonLibraryMakefile
