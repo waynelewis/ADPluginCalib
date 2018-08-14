@@ -21,6 +21,7 @@
 #include <epicsExport.h>
 
 #include <opencv2/opencv.hpp>
+#include <vector>
 
 static const char *driverName="NDPluginCalib";
 
@@ -64,7 +65,8 @@ static const char *driverName="NDPluginCalib";
     NDBayer_GRGB    GR
     NDBayer_BGGR    BG
 */
-
+using namespace cv;
+using namespace std;
 
 /** Callback function that is called by the NDArray driver with new NDArray data.
   * Does image processing.
@@ -76,27 +78,10 @@ void NDPluginCalib::processCallbacks(NDArray *pArray)
    * It is called with the mutex already locked.  It unlocks it during long calculations when private
    * structures don't need to be protected.
    */
-  NDArray *pScratch=NULL;
-  NDArrayInfo arrayInfo;
-
-  int i, j;
-  unsigned int numRows, rowSize;
-  unsigned char *inData, *outData;
-  int edge1;
-  int edge1Found;
-  int edge2;
-  int edge2Found;
-  double lowThreshold;
-  double thresholdRatio;
 
   static const char* functionName = "processCallbacks";
-
-  getDoubleParam( NDPluginCalibLowThreshold,   &lowThreshold);
-  getDoubleParam( NDPluginCalibThresholdRatio, &thresholdRatio);
-
-  // Mono image is OK
-  if (pArray->ndims != 2)
-  {
+  // Check if we have BW image
+  if (pArray->ndims != 2) {
     asynPrint(
         this->pasynUserSelf, 
         ASYN_TRACE_ERROR, 
@@ -106,29 +91,44 @@ void NDPluginCalib::processCallbacks(NDArray *pArray)
     return;
   }
 
-  /* Call the base class method */
+
+  NDArray 	*pScratch=NULL;    //- to .h?
+  NDArrayInfo 	 arrayInfo;
+
+  // Call the base class method 
   NDPluginDriver::beginProcessCallbacks(pArray);
 
+  // Get info from pArray to set width and height of the picture
+  unsigned int height, width;        //- to .h?
   pArray->getInfo(&arrayInfo);
-  rowSize = pArray->dims[arrayInfo.xDim].size;
-  numRows = pArray->dims[arrayInfo.yDim].size;
+  width = pArray->dims[arrayInfo.xDim].size;
+  height= pArray->dims[arrayInfo.yDim].size;
 
-  /* Do the computationally expensive code with the lock released */
+  // get parameters for Canny  algorithm
+  double lowThreshold, thresholdRatio;  //- to .h? 
+  getDoubleParam( NDPluginCalibLowThreshold,   &lowThreshold);
+  getDoubleParam( NDPluginCalibThresholdRatio, &thresholdRatio);
+
+
+
+  // Do the computationally expensive code with the lock released 
   this->unlock();
-  // This plugin works on a monochromatic image
-  NDDimension_t scratch_dims[2];
-  pScratch->initDimension(&scratch_dims[0], rowSize);
-  pScratch->initDimension(&scratch_dims[1], numRows);
+      
+  unsigned char *inData, *outData;
+  NDDimension_t scratchDim[2];
+  pScratch->initDimension(&scratchDim[0], width);
+  pScratch->initDimension(&scratchDim[1], height);
 
-  /* make the array something we understand */
-  this->pNDArrayPool->convert( pArray, &pScratch, NDUInt8, scratch_dims);
+  // make the array something we understand 
+  this->pNDArrayPool->convert( pArray, &pScratch, NDUInt8, scratchDim);
 
   pScratch->getInfo(&arrayInfo);
+  width = pScratch->dims[arrayInfo.xDim].size;
+  height = pScratch->dims[arrayInfo.yDim].size;
 
-  rowSize = pScratch->dims[arrayInfo.xDim].size;
-  numRows = pScratch->dims[arrayInfo.yDim].size;
+ 
+  cv::Mat img = cv::Mat( height, width, CV_8UC1);
 
-  cv::Mat img = cv::Mat( numRows, rowSize, CV_8UC1);
 
   cv::Mat detected_edges;
 
@@ -138,8 +138,12 @@ void NDPluginCalib::processCallbacks(NDArray *pArray)
   outData = (unsigned char *)img.data;
   memcpy( outData, inData, arrayInfo.nElements * sizeof(unsigned char));
 
+  std::cout << "width: " << width << "\theight: " << height << std::endl;
+
+  // ---------------------------------------------------------------------------------
+  // first slightly blur the image
+  cv::Mat img_blur;
   try {
-    // As suggested in the openCV examples, first slightly blur the image
     cv::blur( img, detected_edges, cv::Size(3,3));
   }
   catch( cv::Exception &e) {
@@ -151,8 +155,9 @@ void NDPluginCalib::processCallbacks(NDArray *pArray)
     return;
   }
 
+  // ---------------------------------------------------------------------------------
+  // Here is the edge detection routine.
   try {
-    // Here is the edge detection routine.
     cv::Canny( detected_edges, detected_edges, lowThreshold, thresholdRatio * lowThreshold, 3);
   }
   catch( cv::Exception &e) {
@@ -164,90 +169,132 @@ void NDPluginCalib::processCallbacks(NDArray *pArray)
     return;
   }
 
+  // ---------------------------------------------------------------------------------
+  // find contour and get the bigest one
+  std::vector<std::vector<Point> > contours;
+  std::vector<Vec4i> hierarchy;
+
+  try {
+    cv::findContours(img, contours, hierarchy, RETR_TREE, CHAIN_APPROX_SIMPLE);
+  }
+  catch( cv::Exception &e) {
+    const char* err_msg = e.what();
+
+    asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, "%s::%s cv::Canny exception:  %s\n", 
+        driverName, functionName, err_msg);
+    this->lock();
+    return;
+  }
+
+  // ---------------------------------------------------------------------------------
+  // get the biggest contour and find its corners 
+  int MAX_COUNTOUR_AREA = width * height;
+  int maxAreaFound = MAX_COUNTOUR_AREA * 0.3;
+  //vector<vector<Point> > pageContour; 
+  //vector<vector<Point> > approx; 
+
+  vector<Point>  pageContour; 
+  vector<Point>  approx; 
+  for (auto cnt:contours){
+     double perimeter = cv::arcLength(cnt, true);		    
+     cv::approxPolyDP(cnt, approx, 0.03 * perimeter, true);	
+     if (approx.size() == 4 and 
+             cv::isContourConvex(approx) and 
+             maxAreaFound < cv::contourArea(approx) and
+             cv::contourArea(approx) < MAX_COUNTOUR_AREA){		
+             maxAreaFound = cv::contourArea(approx);		        
+             pageContour = approx;
+     }
+  }
+
+  cout <<" x1:" <<  pageContour[0].x << " y1:" << pageContour[0].y  << endl;
+  cout <<" x2:" <<  pageContour[1].x << " y2:" << pageContour[1].y  << endl;
+  cout <<" x3:" <<  pageContour[2].x << " y3:" << pageContour[2].y  << endl;
+  cout <<" x4:" <<  pageContour[3].x << " y4:" << pageContour[3].y  << endl;
+
+
+  // TODO
+  // 1. convert pageContour to vector of 4 points (targetPoints)
+  // 2. apply pageContour and targetPoints to transformation matrix
+  // 3. back image to db
+  // 4. calculate px to mm and back it to db
+
+//  for (auto pc:pageContour){
+//       cout <<" x:" <<  pc.x << " y:" << pc.y  << endl;
+//  }
+
+//  for cnt in contours:		    
+//     perimeter = cv2.arcLength(cnt, True)		    
+//     approx = cv2.approxPolyDP(cnt, 0.03 * perimeter, True)	
+//     if (len(approx) == 4 and 
+//             cv2.isContourConvex(approx) and 
+//             maxAreaFound < cv2.contourArea(approx) < MAX_COUNTOUR_AREA):		
+//             maxAreaFound = cv2.contourArea(approx)		        
+//             pageContour = approx
+//     return pageContour
+
+
+  // ---------------------------------------------------------------------------------
+  // sort corners 1-topleft, 2-bottomleft, 3-bottomright, 4-topright
+//  diff = np.diff(pts, axis=1)		    
+//  summ = pts.sum(axis=1)		    		    
+//  # Top-left point has smallest sum...		    
+//  # np.argmin() returns INDEX of min		    
+//  return np.array([pts[np.argmin(summ)],      
+//                   pts[np.argmax(diff)],	
+//                   pts[np.argmax(summ)],		
+//                   pts[np.argmin(diff)]], np.float32)
+
+
+
+  // ---------------------------------------------------------------------------------
+  // find target points
+//  # simply way
+//    height = max(np.linalg.norm(sPoints[0] - sPoints[1]),		             
+//    np.linalg.norm(sPoints[2] - sPoints[3]))		
+//    width  = max(np.linalg.norm(sPoints[1] - sPoints[2]),		
+//    np.linalg.norm(sPoints[3] - sPoints[0]))
+//    # calculate ratio (check if this is a rectangle or a square )
+///    diff = (height - width)
+//    resx = 0, 
+//    resy = 0;
+//    if diff > 0:
+//       resx = diff/2
+//       resy = 0
+//    else:
+//       resx = 0
+//       resy = -diff/2
+//					       
+//    ### encapsulating for clear view what is going on.... could be avoided
+//      x1 = pts[0][0]
+//      y1 = pts[0][1]
+//      x2 = pts[1][0]
+//      y2 = pts[1][1]
+//      x3 = pts[2][0]
+//      y3 = pts[2][1]
+//      x4 = pts[3][0]
+//      y4 = pts[3][1]
+//
+//   # Create target points		
+//   return np.array([[min(x1,x2)-resx, min(y1,y4)-resy],		                    
+//                    [min(x1,x2)-resx, max(y2,y3)+resy],		                 
+//                    [max(x3,x4)+resx, max(y2,y3)+resy],		                  
+//                    [max(x3,x4)+resx, min(y3,y4)-resy]], np.float32)
+													      
+
+
+  // ---------------------------------------------------------------------------------
+  // transform image
+//   cv::Mat M = cv::getPerspectiveTransform(sPoints, tPoints) 	
+//   cv::warpPerspective(img, M, (width, height))		
+
+
+
+  // ---------------------------------------------------------------------------------
   // Take the lock again since we are accessing the parameter library and 
   // these calculations are not time consuming
   this->lock();
 
-  // Try to find the top pixel
-  j = rowSize/2;
-  edge1Found = 0;
-  edge2Found = 0;
-  outData = (unsigned char *)detected_edges.data;
-  for( i=0; (unsigned int)i<numRows; i++) {
-    if( *(outData + i*rowSize + j) != 0) {
-      edge1Found = 1;
-      break;
-    }
-  }
-  edge1 = i;
-
-  setIntegerParam( NDPluginCalibTopEdgeFound, edge1Found);
-  if( edge1Found)
-    setIntegerParam( NDPluginCalibTopPixel, edge1);
-
-  // Maybe find the bottom pixel
-  for( i=numRows - 1; i>=0; i--) {
-    if( *(outData + i*rowSize + j) != 0) {
-      edge2Found = 1;
-      break;
-    }
-  }
-
-  edge2 = i;
-  setIntegerParam( NDPluginCalibBottomEdgeFound, edge2Found);
-  if( edge2Found)
-    setIntegerParam( NDPluginCalibBottomPixel, edge2);
-
-
-  if( edge1Found && edge2Found && edge1 < edge2) {
-    // Both edges found and they are not the same
-    //
-    setIntegerParam( NDPluginCalibVerticalFound, 1);
-    setDoubleParam( NDPluginCalibVerticalCenter, (edge1 + edge2)/2.0);
-    setIntegerParam(    NDPluginCalibVerticalSize, edge2 - edge1);
-  } else {
-    // no edge found
-    setIntegerParam( NDPluginCalibVerticalFound, 0);
-  }
-
-  // Find Left pixel
-  i = numRows/2;
-  edge1Found = 0;
-  edge2Found = 0;
-  for( j=0; (unsigned int)j<rowSize; j++) {
-    if( *(outData + i*rowSize + j) != 0) {
-      edge1Found = 1;
-      break;
-    }
-  }
-  edge1 = j;
-
-  setIntegerParam( NDPluginCalibLeftEdgeFound, edge1Found);
-  if( edge1Found)
-    setIntegerParam( NDPluginCalibLeftPixel, edge1);
-
-
-  // Maybe find right pixel
-  for( j=rowSize-1; j>=0; j--) {
-    if( *(outData + i*rowSize + j) != 0) {
-      edge2Found = 1;
-      break;
-    }
-  }
-  edge2 = j;
-
-  setIntegerParam( NDPluginCalibRightEdgeFound, edge2Found);
-  if( edge2Found)
-    setIntegerParam( NDPluginCalibRightPixel, edge2);
-
-  if( edge1Found && edge2Found && edge1 < edge2) {
-    setIntegerParam( NDPluginCalibHorizontalFound, 1);
-    setDoubleParam( NDPluginCalibHorizontalCenter, (edge1 + edge2)/2.0);
-    setIntegerParam( NDPluginCalibHorizontalSize, edge2 - edge1);
-  } else {
-    // no edge found
-    setIntegerParam( NDPluginCalibHorizontalFound, 0);
-  }
 
   int arrayCallbacks = 0;
   getIntegerParam(NDArrayCallbacks, &arrayCallbacks);
@@ -266,7 +313,7 @@ void NDPluginCalib::processCallbacks(NDArray *pArray)
 }
 
 
-
+
 /** Constructor for NDPluginCalib; most parameters are simply passed to NDPluginDriver::NDPluginDriver.
  * After calling the base class constructor this method sets reasonable default values for all of the
  * parameters.
