@@ -180,7 +180,7 @@ void NDPluginCalib::processCallbacks(NDArray *pArray)
   catch( cv::Exception &e) {
     const char* err_msg = e.what();
 
-    asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, "%s::%s cv::Canny exception:  %s\n", 
+    asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, "%s::%s cv::FindContours exception:  %s\n", 
         driverName, functionName, err_msg);
     this->lock();
     return;
