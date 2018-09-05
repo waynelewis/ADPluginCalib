@@ -126,19 +126,17 @@ void NDPluginCalib::processCallbacks(NDArray *pArray)
   width = pScratch->dims[arrayInfo.xDim].size;
   height = pScratch->dims[arrayInfo.yDim].size;
 
- 
   cv::Mat img = cv::Mat( height, width, CV_8UC1);
-
-
   cv::Mat detected_edges;
 
+ 
   // Initialize the output data array
   //
   inData  = (unsigned char *)pScratch->pData;
   outData = (unsigned char *)img.data;
   memcpy( outData, inData, arrayInfo.nElements * sizeof(unsigned char));
 
-  std::cout << "width: " << width << "\theight: " << height << std::endl;
+  //std::cout << "width: " << width << "\theight: " << height << std::endl;
 
   // ---------------------------------------------------------------------------------
   // first slightly blur the image
@@ -148,7 +146,6 @@ void NDPluginCalib::processCallbacks(NDArray *pArray)
   }
   catch( cv::Exception &e) {
     const char* err_msg = e.what();
-
     asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, "%s::%s cv::blur exception:  %s\n", 
         driverName, functionName, err_msg);
     this->lock();
@@ -190,8 +187,6 @@ void NDPluginCalib::processCallbacks(NDArray *pArray)
   // get the biggest contour and find its corners 
   int MAX_COUNTOUR_AREA = width * height;
   int maxAreaFound = MAX_COUNTOUR_AREA * 0.3;
-  //vector<vector<Point> > pageContour; 
-  //vector<vector<Point> > approx; 
 
   vector<Point>  pageContour; 
   vector<Point>  approx; 
@@ -206,89 +201,102 @@ void NDPluginCalib::processCallbacks(NDArray *pArray)
              pageContour = approx;
      }
   }
+/*
+  if(pageContour.size() == 0){
+    asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, "%s::%s cv::FindContours exception: ,no contours were found\n", 
+        driverName, functionName);
+    this->lock();
+    return ;
+  }
+  else{
+    cout << "Hello! I am a Calib Plugin!" << endl;
+  }
+*/
 
-  cout <<" x1:" <<  pageContour[0].x << " y1:" << pageContour[0].y  << endl;
-  cout <<" x2:" <<  pageContour[1].x << " y2:" << pageContour[1].y  << endl;
-  cout <<" x3:" <<  pageContour[2].x << " y3:" << pageContour[2].y  << endl;
-  cout <<" x4:" <<  pageContour[3].x << " y4:" << pageContour[3].y  << endl;
+  Point2f pt1, pt2, pt3, pt4;
+  Point2f ptc1, ptc2, ptc3, ptc4;
+  float maxS = 0;
+  float minS = 5000;
+  float maxD = 0;
+  float minD = 5000;
+  float temp = 0;
+
+ // ---------------------------------------------------------------------------------
+ // sort corners 1-topleft, 2-bottomleft, 3-bottomright, 4-topright
+ //
+
+  for (auto pts:pageContour){
+       temp = (pts.x + pts.y);
+       if (temp < minS){
+           pt1 = pts;
+           minS = temp;
+       }
+
+       temp = (pts.x + pts.y);
+       if (temp > maxS){
+           pt3 = pts;
+           maxS = temp;
+       }
+
+       temp = (pts.x - pts.y);
+       if (temp > maxD){
+           pt4 = pts;
+           maxD = temp;
+       }
+
+       temp = (pts.x - pts.y);
+       if (temp < minD){
+           pt2 = pts;
+           minD = temp;
+       }
+  }
+
+  //-----------------------------------------------------------------------------
+  // check the width and the height of the bigest contour, to convert rectangular to square.
+  // we need a difference between h and w.
+  double h = max(norm(pt1 - pt2), norm(pt3 - pt4));
+  double w = max(norm(pt2 - pt3), norm(pt4 - pt1));
+ 
+
+  double diff = (h - w);
+  double resx = 0;
+  double resy = 0;
+  if (diff > 0){
+      resx = diff / 2;
+      resy = 0;
+  }
+  else{
+      resx = 0;
+      resy = -diff / 2;
+  }
+
+  ptc1.x = min(pt1.x, pt2.x) - resx; ptc1.y = min(pt1.y, pt4.y) - resy;
+  ptc2.x = min(pt1.x, pt2.x) - resx; ptc2.y = max(pt2.y, pt3.y) + resy;
+  ptc3.x = max(pt3.x, pt4.x) + resx; ptc3.y = max(pt2.y, pt3.y) + resy;
+  ptc4.x = max(pt3.x, pt4.x) + resx; ptc4.y = min(pt3.y, pt4.y) - resy;
+
+  Point2f ptc0;
+  ptc0.x = (ptc4.x - ptc1.x) / 2 + ptc1.x;
+  ptc0.y = (ptc2.y - ptc1.y) / 2 + ptc1.y;
 
 
-  // TODO
-  // 1. convert pageContour to vector of 4 points (targetPoints)
-  // 2. apply pageContour and targetPoints to transformation matrix
-  // 3. back image to db
-  // 4. calculate px to mm and back it to db
-
-//  for (auto pc:pageContour){
-//       cout <<" x:" <<  pc.x << " y:" << pc.y  << endl;
-//  }
-
-//  for cnt in contours:		    
-//     perimeter = cv2.arcLength(cnt, True)		    
-//     approx = cv2.approxPolyDP(cnt, 0.03 * perimeter, True)	
-//     if (len(approx) == 4 and 
-//             cv2.isContourConvex(approx) and 
-//             maxAreaFound < cv2.contourArea(approx) < MAX_COUNTOUR_AREA):		
-//             maxAreaFound = cv2.contourArea(approx)		        
-//             pageContour = approx
-//     return pageContour
-
-
-  // ---------------------------------------------------------------------------------
-  // sort corners 1-topleft, 2-bottomleft, 3-bottomright, 4-topright
-//  diff = np.diff(pts, axis=1)		    
-//  summ = pts.sum(axis=1)		    		    
-//  # Top-left point has smallest sum...		    
-//  # np.argmin() returns INDEX of min		    
-//  return np.array([pts[np.argmin(summ)],      
-//                   pts[np.argmax(diff)],	
-//                   pts[np.argmax(summ)],		
-//                   pts[np.argmin(diff)]], np.float32)
-
-
-
-  // ---------------------------------------------------------------------------------
-  // find target points
-//  # simply way
-//    height = max(np.linalg.norm(sPoints[0] - sPoints[1]),		             
-//    np.linalg.norm(sPoints[2] - sPoints[3]))		
-//    width  = max(np.linalg.norm(sPoints[1] - sPoints[2]),		
-//    np.linalg.norm(sPoints[3] - sPoints[0]))
-//    # calculate ratio (check if this is a rectangle or a square )
-///    diff = (height - width)
-//    resx = 0, 
-//    resy = 0;
-//    if diff > 0:
-//       resx = diff/2
-//       resy = 0
-//    else:
-//       resx = 0
-//       resy = -diff/2
-//					       
-//    ### encapsulating for clear view what is going on.... could be avoided
-//      x1 = pts[0][0]
-//      y1 = pts[0][1]
-//      x2 = pts[1][0]
-//      y2 = pts[1][1]
-//      x3 = pts[2][0]
-//      y3 = pts[2][1]
-//      x4 = pts[3][0]
-//      y4 = pts[3][1]
-//
-//   # Create target points		
-//   return np.array([[min(x1,x2)-resx, min(y1,y4)-resy],		                    
-//                    [min(x1,x2)-resx, max(y2,y3)+resy],		                 
-//                    [max(x3,x4)+resx, max(y2,y3)+resy],		                  
-//                    [max(x3,x4)+resx, min(y3,y4)-resy]], np.float32)
-													      
-
+  vector<Point2f>  sPoints;
+  vector<Point2f>  tPoints;
+  sPoints.push_back(pt1);
+  sPoints.push_back(pt2);
+  sPoints.push_back(pt3);
+  sPoints.push_back(pt4);
+  tPoints.push_back(ptc1);
+  tPoints.push_back(ptc2);
+  tPoints.push_back(ptc3);
+  tPoints.push_back(ptc4);
 
   // ---------------------------------------------------------------------------------
   // transform image
-//   cv::Mat M = cv::getPerspectiveTransform(sPoints, tPoints) 	
-//   cv::warpPerspective(img, M, (width, height))		
-
-
+  Mat M = getPerspectiveTransform(sPoints, tPoints);
+  Mat rotated;
+  warpPerspective(img, rotated, M, Size(width, height));
+  
 
   // ---------------------------------------------------------------------------------
   // Take the lock again since we are accessing the parameter library and 
@@ -299,7 +307,8 @@ void NDPluginCalib::processCallbacks(NDArray *pArray)
   int arrayCallbacks = 0;
   getIntegerParam(NDArrayCallbacks, &arrayCallbacks);
   if (arrayCallbacks == 1) {
-    inData  = (unsigned char *)detected_edges.data;
+    //inData  = (unsigned char *)detected_edges.data;
+    inData  = (unsigned char *)rotated.data;
     outData = (unsigned char *)pScratch->pData;
     memcpy(outData, inData, arrayInfo.nElements * sizeof(unsigned char));
     this->getAttributes(pScratch->pAttributeList);
