@@ -2,9 +2,11 @@
  * NDPluginCalib.cpp
  *
  * Image processing plugin
- * Author: Keith Brister
- *
- * Created November 10, 2014
+ * Author: Tomasz Brys
+ * email:  tomasz.brys@esss.se 
+ * the driver is base od ADPluginEdge and ADPluginConvert
+ * it includes also procedures found on webpage which a free available
+ * Created October 10, 2018
  */
 
 #include <stdlib.h>
@@ -20,242 +22,123 @@
 #include "NDPluginCalib.h"
 #include <epicsExport.h>
 
-#include <opencv2/opencv.hpp>
-#include <vector>
+//#include <opencv2/opencv.hpp>
+//#include <vector>
 
 static const char *driverName="NDPluginCalib";
 
 
-/** Color Mode to CV Matrix
-
-    NDInt8,     Signed 8-bit integer        
-    NDUInt8,    Unsigned 8-bit integer        
-    NDInt16,    Signed 16-bit integer        
-    NDUInt16,   Unsigned 16-bit integer        
-    NDInt32,    Signed 32-bit integer        
-    NDUInt32,   Unsigned 32-bit integer        
-    NDFloat32,  32-bit float                
-    NDFloat64   64-bit float                
-
-    NDColorModeMono,    Monochromatic image                                                        
-    NDColorModeBayer,   Bayer pattern image, 1 value per pixel but with color filter on detector
-    NDColorModeRGB1,    RGB image with pixel color interleave, data array is [3, NX, NY]        
-    NDColorModeRGB2,    RGB image with row color interleave, data array is [NX, 3, NY]                
-    NDColorModeRGB3,    RGB image with plane color interleave, data array is [NX, NY, 3]        
-    NDColorModeYUV444,  YUV image, 3 bytes encodes 1 RGB pixel                                        
-    NDColorModeYUV422,  YUV image, 4 bytes encodes 2 RGB pixel                                        
-    NDColorModeYUV411   YUV image, 6 bytes encodes 4 RGB pixels                                        
-
-
-    NDArray         OpenCV
-    =========       ==========
-    NDInt8          CV_8S
-    NDUInt8         CV_8U
-    NDInt16         CV_16S
-    NDUInt16        CV_16U
-    NDInt32         CV_32S
-    NDUInt32        CV_32U
-    NDFloat32       CV_32F
-    NDFloat64       CV_64F
-
-    ND_BayerPatern  OpenCV
-    ==============  ======
-    NDBayer_RGGB    RG
-    NDBayer_GBRG    GB
-    NDBayer_GRGB    GR
-    NDBayer_BGGR    BG
-*/
 using namespace cv;
 using namespace std;
 
-/** Callback function that is called by the NDArray driver with new NDArray data.
-  * Does image processing.
-  * \param[in] pArray  The NDArray from the callback.
-  */
-void NDPluginCalib::processCallbacks(NDArray *pArray)
-{
-  /* This function does array processing.
-   * It is called with the mutex already locked.  It unlocks it during long calculations when private
-   * structures don't need to be protected.
-   */
 
-  static const char* functionName = "processCallbacks";
-  // Check if we have BW image
-  if (pArray->ndims != 2) {
-    asynPrint(
-        this->pasynUserSelf, 
-        ASYN_TRACE_ERROR, 
-        "%s::%s Please convert edge detection plugin input image format to mono\n", 
-        driverName, 
-        functionName);
-    return;
-  }
+//==========================================================================================
+int NDPluginCalib::fitLinear(vector<float> &dX, vector<float> &dY, vector<float> &result){
+// fit line to the data points
+// data suppose to be in two vectors, x(mm) and y(pixels)
+// the result will be stored in vector result
+// algorithm least sqare method with checking verticality/horizontality
 
+  double sumX = 0, sumY = 0, sumXX = 0, sumYY= 0, sumXY = 0;
+  int nr = dX.size();
+  int nr2 = dY.size();
+  if(nr != nr2)
+    return -1;
 
-  NDArray 	*pScratch=NULL;    //- to .h?
-  NDArrayInfo 	 arrayInfo;
+  for (int i = 0; i < nr; i++){
+      sumX += dX.at(i);
+      sumY += dY.at(i);
+      sumXY += dX.at(i) * dY.at(i);
+      sumXX += dX.at(i) * dX.at(i);
+      sumYY += dY.at(i) * dY.at(i);
+   }
 
-  // Call the base class method 
-  NDPluginDriver::beginProcessCallbacks(pArray);
+   sumX  /= nr;
+   sumY  /= nr;
+   sumXX /= nr;
+   sumYY /= nr;
+   sumXY /= nr;
 
-  // Get info from pArray to set width and height of the picture
-  unsigned int height, width;        //- to .h?
-  pArray->getInfo(&arrayInfo);
-  width = pArray->dims[arrayInfo.xDim].size;
-  height= pArray->dims[arrayInfo.yDim].size;
-
-  // get parameters for Canny  algorithm
-  double lowThreshold, thresholdRatio;  //- to .h? 
-  getDoubleParam( NDPluginCalibLowThreshold,   &lowThreshold);
-  getDoubleParam( NDPluginCalibThresholdRatio, &thresholdRatio);
+   double A = (sumXY - sumX*sumY);
+   double B = 0;
+   double Bx = sumXX - sumX * sumX;
+   double By = sumYY - sumY * sumY;
 
 
-
-  // Do the computationally expensive code with the lock released 
-  this->unlock();
-      
-  unsigned char *inData, *outData;
-  NDDimension_t scratchDim[2];
-  pScratch->initDimension(&scratchDim[0], width);
-  pScratch->initDimension(&scratchDim[1], height);
-
-  // make the array something we understand 
-  this->pNDArrayPool->convert( pArray, &pScratch, NDUInt8, scratchDim);
-
-  pScratch->getInfo(&arrayInfo);
-  width = pScratch->dims[arrayInfo.xDim].size;
-  height = pScratch->dims[arrayInfo.yDim].size;
-
-  cv::Mat img = cv::Mat( height, width, CV_8UC1);
-  cv::Mat detected_edges;
-
- 
-  // Initialize the output data array
-  //
-  inData  = (unsigned char *)pScratch->pData;
-  outData = (unsigned char *)img.data;
-  memcpy( outData, inData, arrayInfo.nElements * sizeof(unsigned char));
-
-  //std::cout << "width: " << width << "\theight: " << height << std::endl;
-
-  // ---------------------------------------------------------------------------------
-  // first slightly blur the image
-  cv::Mat img_blur;
-  try {
-    cv::blur( img, detected_edges, cv::Size(3,3));
-  }
-  catch( cv::Exception &e) {
-    const char* err_msg = e.what();
-    asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, "%s::%s cv::blur exception:  %s\n", 
-        driverName, functionName, err_msg);
-    this->lock();
-    return;
-  }
-
-  // ---------------------------------------------------------------------------------
-  // Here is the edge detection routine.
-  try {
-    cv::Canny( detected_edges, detected_edges, lowThreshold, thresholdRatio * lowThreshold, 3);
-  }
-  catch( cv::Exception &e) {
-    const char* err_msg = e.what();
-
-    asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, "%s::%s cv::Canny exception:  %s\n", 
-        driverName, functionName, err_msg);
-    this->lock();
-    return;
-  }
-
-  // ---------------------------------------------------------------------------------
-  // find contour and get the bigest one
-  std::vector<std::vector<Point> > contours;
-  std::vector<Vec4i> hierarchy;
-
-  try {
-    cv::findContours(img, contours, hierarchy, RETR_TREE, CHAIN_APPROX_SIMPLE);
-  }
-  catch( cv::Exception &e) {
-    const char* err_msg = e.what();
-
-    asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, "%s::%s cv::FindContours exception:  %s\n", 
-        driverName, functionName, err_msg);
-    this->lock();
-    return;
-  }
-
-  // ---------------------------------------------------------------------------------
-  // get the biggest contour and find its corners 
-  int MAX_COUNTOUR_AREA = width * height;
-  int maxAreaFound = MAX_COUNTOUR_AREA * 0.3;
-
-  vector<Point>  pageContour; 
-  vector<Point>  approx; 
-  for (auto cnt:contours){
-     double perimeter = cv::arcLength(cnt, true);		    
-     cv::approxPolyDP(cnt, approx, 0.03 * perimeter, true);	
-     if (approx.size() == 4 and 
-             cv::isContourConvex(approx) and 
-             maxAreaFound < cv::contourArea(approx) and
-             cv::contourArea(approx) < MAX_COUNTOUR_AREA){		
-             maxAreaFound = cv::contourArea(approx);		        
-             pageContour = approx;
+   if( fabs( Bx ) < fabs( By ) ) //!< Test verticality/horizontality
+      { // Line is more Vertical.
+        B = By;
+        std::swap(A,B);
      }
-  }
-/*
-  if(pageContour.size() == 0){
-    asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, "%s::%s cv::FindContours exception: ,no contours were found\n", 
-        driverName, functionName);
-    this->lock();
-    return ;
-  }
-  else{
-    cout << "Hello! I am a Calib Plugin!" << endl;
-  }
-*/
+     else
+     {   // Line is more Horizontal.
+        // Classical solution, when we expect more horizontal-like line
+        B = Bx;
+     }
+
+   double C = - ( A * sumX + B * sumY ); 
+
+   result[0] = (-A/B);
+   result[1] = (-C/B);
+
+  //cout << "A=" << A << " B=" << B << " C=" << C << endl;
+  cout << "fit function y = a*x + b" << endl;
+  cout << "a=" << (-A/B) << " b=" << (-C/B) << endl;
+
+  return 0;
+}
+
+//==========================================================================================
+
+void NDPluginCalib::sortPoints(std::vector<cv::Point2f>& points){
 
   Point2f pt1, pt2, pt3, pt4;
-  Point2f ptc1, ptc2, ptc3, ptc4;
-  float maxS = 0;
-  float minS = 5000;
-  float maxD = 0;
-  float minD = 5000;
+  float maxSum = 0;
+  float minSum = 5000;
+  float maxDiff = 0;
+  float minDiff = 5000;
   float temp = 0;
 
- // ---------------------------------------------------------------------------------
- // sort corners 1-topleft, 2-bottomleft, 3-bottomright, 4-topright
- //
-
-  for (auto pts:pageContour){
+  for (auto pts:points){
        temp = (pts.x + pts.y);
-       if (temp < minS){
+       if (temp < minSum){
            pt1 = pts;
-           minS = temp;
+           minSum = temp;
        }
 
        temp = (pts.x + pts.y);
-       if (temp > maxS){
+       if (temp > maxSum){
            pt3 = pts;
-           maxS = temp;
+           maxSum = temp;
        }
 
        temp = (pts.x - pts.y);
-       if (temp > maxD){
+       if (temp > maxDiff){
            pt4 = pts;
-           maxD = temp;
+           maxDiff = temp;
        }
 
        temp = (pts.x - pts.y);
-       if (temp < minD){
+       if (temp < minDiff){
            pt2 = pts;
-           minD = temp;
+           minDiff = temp;
        }
-  }
+  } // end for
 
-  //-----------------------------------------------------------------------------
-  // check the width and the height of the bigest contour, to convert rectangular to square.
+ points[0] = pt1;
+ points[1] = pt2;
+ points[2] = pt3;
+ points[3] = pt4;
+
+}
+
+//==========================================================================================
+
+void NDPluginCalib::findTransformationPoints(std::vector<Point2f>& pt, std::vector<Point2f>& ptc){
+  // check the width and the height of the bigest contour, to convert quadrangle to square.
   // we need a difference between h and w.
-  double h = max(norm(pt1 - pt2), norm(pt3 - pt4));
-  double w = max(norm(pt2 - pt3), norm(pt4 - pt1));
+  double h = max(norm(pt[0] - pt[1]), norm(pt[2] - pt[3]));
+  double w = max(norm(pt[1] - pt[2]), norm(pt[3] - pt[0]));
  
 
   double diff = (h - w);
@@ -270,58 +153,298 @@ void NDPluginCalib::processCallbacks(NDArray *pArray)
       resy = -diff / 2;
   }
 
-  ptc1.x = min(pt1.x, pt2.x) - resx; ptc1.y = min(pt1.y, pt4.y) - resy;
-  ptc2.x = min(pt1.x, pt2.x) - resx; ptc2.y = max(pt2.y, pt3.y) + resy;
-  ptc3.x = max(pt3.x, pt4.x) + resx; ptc3.y = max(pt2.y, pt3.y) + resy;
-  ptc4.x = max(pt3.x, pt4.x) + resx; ptc4.y = min(pt3.y, pt4.y) - resy;
+  ptc[0].x = min(pt[0].x, pt[1].x) - resx; ptc[0].y = min(pt[0].y, pt[3].y) - resy;
+  ptc[1].x = min(pt[0].x, pt[1].x) - resx; ptc[1].y = max(pt[1].y, pt[2].y) + resy;
+  ptc[2].x = max(pt[2].x, pt[3].x) + resx; ptc[2].y = max(pt[1].y, pt[2].y) + resy;
+  ptc[3].x = max(pt[2].x, pt[3].x) + resx; ptc[3].y = min(pt[2].y, pt[3].y) - resy;
 
-  Point2f ptc0;
-  ptc0.x = (ptc4.x - ptc1.x) / 2 + ptc1.x;
-  ptc0.y = (ptc2.y - ptc1.y) / 2 + ptc1.y;
-
-
-  vector<Point2f>  sPoints;
-  vector<Point2f>  tPoints;
-  sPoints.push_back(pt1);
-  sPoints.push_back(pt2);
-  sPoints.push_back(pt3);
-  sPoints.push_back(pt4);
-  tPoints.push_back(ptc1);
-  tPoints.push_back(ptc2);
-  tPoints.push_back(ptc3);
-  tPoints.push_back(ptc4);
-
-  // ---------------------------------------------------------------------------------
-  // transform image
-  Mat M = getPerspectiveTransform(sPoints, tPoints);
-  Mat rotated;
-  warpPerspective(img, rotated, M, Size(width, height));
-  
-
-  // ---------------------------------------------------------------------------------
-  // Take the lock again since we are accessing the parameter library and 
-  // these calculations are not time consuming
-  this->lock();
-
-
-  int arrayCallbacks = 0;
-  getIntegerParam(NDArrayCallbacks, &arrayCallbacks);
-  if (arrayCallbacks == 1) {
-    //inData  = (unsigned char *)detected_edges.data;
-    inData  = (unsigned char *)rotated.data;
-    outData = (unsigned char *)pScratch->pData;
-    memcpy(outData, inData, arrayInfo.nElements * sizeof(unsigned char));
-    this->getAttributes(pScratch->pAttributeList);
-    doCallbacksGenericPointer(pScratch, NDArrayData, 0);
-  }
-
-  if (NULL != pScratch)
-    pScratch->release();
-
-  callParamCallbacks();
 }
 
+//==========================================================================================
+void NDPluginCalib::calibrate(const cv::Mat& slice, std::vector<float>& result){
+  //We want to use zerocrossing algorithm to find where is the transition between colors and thus find the distance between contours.
+  // first we calculate average and then move xSlice and ySlice to have pos and neg values. Afterthat zerocrossing algorithm.
+  int average = 0;
+  for (int i = 0; i < slice.cols; i++){
+       average += (int)slice.at<unsigned char>(i); 
+     }
+  average /= slice.cols;
 
+  vector<float> s;
+
+  for(int i = 0; i < slice.cols-1; i++){
+     s.push_back( (float)slice.at<unsigned char>(i) - average);
+     }
+  
+  vector<float> zeroData;
+  vector<float> xData;
+  vector<float> yData;
+
+
+  for(unsigned i = 0; i < s.size()-1; i++){
+     if ( s[i] * s[i+1] < 0 ){
+        float x = i - s[i] / (s[i+1] - s[1]);
+        zeroData.push_back(x);
+     }
+     else if(s[i] * s[i+1] == 0){
+        if( s[i] != 0){
+          zeroData.push_back(i);
+          }
+     }
+     else{
+     }
+
+  }
+
+  // prepare two vectors for fit algorithm
+  vector<float> dX;
+  vector<float> dY;
+
+  // The real distance between contours varies from 5mm to 2.5mm and less but we neglect it. We do not know where we shoud start. 
+  // What we know for sure is that the distance at the beginning between slices are 
+  // 5mm and become smaler to 2.5mm. We search for a place where the distance change from ~90 to ~45 (in pixels).
+  // l1 is the place where the distance change, so we know that from this point distance become ~45
+  // The value ~90 was choosen by calculate diference between first two countors. We have to add some margin to be sure. 
+
+  unsigned l1 = 0, l2 = 0;
+  float bDist =  zeroData[1] - zeroData[0];
+  for (unsigned i = 0; i < zeroData.size()-1; i++){
+    //cout << i << " zeroY(i)= "  << zeroY.at(i) << " " << zeroY.at(i+1) << " diff= " << diff << endl; 
+    if( (zeroData[i+1] - zeroData[i] > bDist-4) and (zeroData[i] - zeroData[i+1] < bDist+4) ){
+      //dYfit.push_back(zeroData[i]);
+    }
+    else{
+      l1 = i;
+      break;
+    }
+  }
+  // now we have to the same but from back
+
+  for (int i = zeroData.size()-1; i > 0; i--){
+    //cout << i << " zeroY(i)= "  << zeroY.at(i) << " " << zeroY.at(i-1) << " diff= " << diff << endl; 
+    if( (zeroData[i] - zeroData[i-1] > bDist-4) and (zeroData[i] - zeroData[i-1] < bDist+4) ){
+      //dYfit.push_back(zeroY.at(i));
+    }
+    else{
+      l2 = i;
+      break;
+    }
+
+  }
+
+  for (unsigned i = 0; i < zeroData.size(); i++){
+      if(i <= l1){
+         dX.push_back(i*5. - 10.*l1);
+         dY.push_back(zeroData[i]);
+      }
+      else if(i > l1 and i <= l1+4){
+         dX.push_back(dX[i-1] + 2.5 );
+         dY.push_back(zeroData[i]);
+      }
+      else if(i >= l2-4 and i <= l2){
+         dX.push_back(20 - (l2-i) * 2.5);
+         dY.push_back(zeroData[i]);
+      }
+      else if(i > l2 ){
+         dX.push_back( 20 + (i-l2) * 5);
+         dY.push_back(zeroData[i]);
+      }
+
+  }
+
+  fitLinear(dX, dY, result);
+
+}
+
+//==========================================================================================
+
+/** Callback function that is called by the NDArray driver with new NDArray data.
+  * Does image processing.
+  * \param[in] pArray  The NDArray from the callback.
+  */
+void NDPluginCalib::processCallbacks(NDArray *pArray)
+{
+  /* This function does array processing.
+   * It is called with the mutex already locked.  It unlocks it during long calculations when private
+   * structures don't need to be protected.
+   */
+ 
+  NDArray *transformedArray;  // transformArray consists transformed original image in order to perform calibration
+  NDArrayInfo_t arrayInfo;
+  static const char* functionName = "processCallbacks";
+
+  // Call the base class method 
+  NDPluginDriver::beginProcessCallbacks(pArray);
+
+
+  // Create a pointer to a structure of type NDArrayInfo_t and use it to get information about the input array.
+  pArray->getInfo(&arrayInfo);
+
+  this->userDims_[0] = arrayInfo.xDim;
+  this->userDims_[1] = arrayInfo.yDim;
+  //this->userDims_[2] = arrayInfo.colorDim;
+  this->userDims_[2] =1; 
+
+  /* Copy the information from the current array */
+  transformedArray = this->pNDArrayPool->copy(pArray, NULL, 1);
+
+  /* Release the lock; this is computationally intensive and does not access any shared data */
+  this->unlock();
+  if ( pArray->ndims == 2 ){
+    this->transformImage(pArray, transformedArray, &arrayInfo);
+  }
+  else {
+    asynPrint( this->pasynUserSelf, ASYN_TRACE_ERROR, "%s::%s, this method is meant to transform 2Dimages when the number of dimensions is <= 3\n",
+          pluginName, functionName);
+  }
+  this->lock();
+
+   // Set NDArraySizeX and NDArraySizeY appropriately
+  setIntegerParam(NDArraySizeX, (int)transformedArray->dims[arrayInfo.xDim].size);
+  setIntegerParam(NDArraySizeY, (int)transformedArray->dims[arrayInfo.yDim].size);
+  setIntegerParam(NDArraySizeZ, 0);
+
+  NDPluginDriver::endProcessCallbacks(transformedArray, false, true);
+  callParamCallbacks();
+  }
+
+//===================================================================================================
+void NDPluginCalib::transformImage(NDArray *inArray, NDArray *outArray, NDArrayInfo_t *arrayInfo) {
+
+  static const char *functionName="transformImage";
+
+  epicsUInt8 *inData  = (epicsUInt8 *)inArray->pData;
+  epicsUInt8 *outData = (epicsUInt8 *)outArray->pData;
+  int xSize, ySize, colorSize;
+
+  xSize = (int)arrayInfo->xSize;
+  ySize = (int)arrayInfo->ySize;
+  colorSize = (int)arrayInfo->colorSize;;
+  if (colorSize > 0)
+    colorSize = (int)arrayInfo->colorSize;
+  else
+    colorSize = 1;
+
+  // Assume output array is same dimensions as input.  Handle rotation cases below.
+  outArray->dims[arrayInfo->xDim].size = inArray->dims[arrayInfo->xDim].size;
+  outArray->dims[arrayInfo->yDim].size = inArray->dims[arrayInfo->yDim].size;
+  if (inArray->ndims > 2) 
+	  outArray->dims[arrayInfo->colorDim].size = inArray->dims[arrayInfo->colorDim].size;
+
+
+  // create opencv object, remember first ySize then xSize!!!
+  cv::Mat img( ySize, xSize, CV_8UC1);
+  memcpy( img.data, inData, arrayInfo->nElements * sizeof(unsigned char));
+
+  // write a Mat object to file as (img.png), very useful if you want to see how algorithm works
+  // vector<int> compression_params;
+  // compression_params.push_back(CV_IMWRITE_PNG_COMPRESSION);
+  // compression_params.push_back(9);
+  //
+  // try {
+  //      imwrite("/mac/pictures/img.png", img, compression_params);
+  //  }
+  // catch (runtime_error& ex) {
+  //      fprintf(stderr, "Exception converting image to PNG format: %s\n", ex.what());
+  //  }
+
+
+  // ---------------------------------------------------------------------------------
+  // first slightly blur the image, then find edges. We use the same object
+  
+  cv::Mat detected_edges;
+  try {
+    cv::blur( img, detected_edges, cv::Size(3,3));
+  }
+  catch( cv::Exception &e) {
+    const char* err_msg = e.what();
+    asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, "%s::%s cv::blur exception:  %s\n", 
+        driverName, functionName, err_msg);
+    this->lock();
+    return;
+  }
+
+  // ---------------------------------------------------------------------------------
+  // Here is the edge detection routine.
+  int lowThreshold = 50;
+  int thresholdRatio = 3;
+  try {
+    cv::Canny( detected_edges, detected_edges, lowThreshold, thresholdRatio * lowThreshold, 3);
+  }
+  catch( cv::Exception &e) {
+    const char* err_msg = e.what();
+
+    asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, "%s::%s cv::Canny exception:  %s\n", 
+        driverName, functionName, err_msg);
+    this->lock();
+    return;
+  }
+  // ---------------------------------------------------------------------------------
+  // find all contour in the image
+  std::vector<std::vector<Point> > contours;
+  std::vector<Vec4i> hierarchy;
+
+  try {
+    cv::findContours(detected_edges, contours, hierarchy, RETR_TREE, CHAIN_APPROX_SIMPLE);
+  }
+  catch( cv::Exception &e) {
+    const char* err_msg = e.what();
+
+    asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, "%s::%s cv::FindContours exception:  %s\n", 
+        driverName, functionName, err_msg);
+    this->lock();
+    return;
+  }
+
+  // ---------------------------------------------------------------------------------
+  // get the biggest contour and find its corners 
+  int MAX_COUNTOUR_AREA = xSize * ySize;
+  int maxAreaFound = MAX_COUNTOUR_AREA * 0.3;
+
+  vector<Point2f>  pageContour; 
+  vector<Point2f>  approx; 
+  for (auto cnt:contours){
+     double perimeter = cv::arcLength(cnt, true);		    
+     cv::approxPolyDP(cnt, approx, 0.03 * perimeter, true);	
+     if (approx.size() == 4 and 
+             cv::isContourConvex(approx) and 
+             maxAreaFound < cv::contourArea(approx) and
+             cv::contourArea(approx) < MAX_COUNTOUR_AREA){		
+             maxAreaFound = cv::contourArea(approx);		        
+             pageContour = approx;
+     }
+  }
+
+
+  vector<Point2f>  tPoints(4);
+  sortPoints(pageContour);
+  findTransformationPoints(pageContour, tPoints);
+  // ---------------------------------------------------------------------------------
+  // transform image
+  // Mat M = getPerspectiveTransform(sPoints, tPoints);
+  cout << "tPoints=\n" << tPoints << endl;
+  Mat M = getPerspectiveTransform(pageContour, tPoints);
+  Mat rotated;
+  warpPerspective(img, rotated, M, Size(xSize, ySize));
+
+  Point2f ptc0;
+  ptc0.x = (tPoints[3].x - tPoints[0].x) / 2 + tPoints[0].x;
+  ptc0.y = (tPoints[1].y - tPoints[0].y) / 2 + tPoints[0].y;
+  
+  cout << "ptc0.x= " << ptc0.x << " ptc0.y= " << ptc0.y << endl; 
+  Mat xSlice = rotated.col(static_cast<int>(ptc0.x)).t();
+  Mat ySlice = rotated.row(static_cast<int>(ptc0.y));
+
+  vector<float> dResultX(2);
+  vector<float> dResultY(2);
+  calibrate( rotated.col(static_cast<int>(ptc0.x)).t(), dResultX);
+  calibrate( rotated.row(static_cast<int>(ptc0.y)),     dResultY);
+
+
+  memcpy( outData, (unsigned char*)rotated.data, arrayInfo->nElements * sizeof(unsigned char));
+
+  } // end of NDPluginTransform::transformImag
+  // ---------------------------------------------------------------------------------
 
 /** Constructor for NDPluginCalib; most parameters are simply passed to NDPluginDriver::NDPluginDriver.
  * After calling the base class constructor this method sets reasonable default values for all of the
@@ -356,22 +479,16 @@ NDPluginCalib::NDPluginCalib(const char *portName, int queueSize, int blockingCa
   char versionString[20];
   //static const char *functionName = "NDPluginCalib";
 
+
   createParam( NDPluginCalibLowThresholdString,     asynParamFloat64,  &NDPluginCalibLowThreshold);
   createParam( NDPluginCalibThresholdRatioString,   asynParamFloat64,  &NDPluginCalibThresholdRatio);
-  createParam( NDPluginCalibVerticalFoundString,    asynParamInt32,    &NDPluginCalibVerticalFound);
-  createParam( NDPluginCalibTopEdgeFoundString,     asynParamInt32,    &NDPluginCalibTopEdgeFound);
-  createParam( NDPluginCalibTopPixelString,         asynParamInt32,    &NDPluginCalibTopPixel);
-  createParam( NDPluginCalibBottomEdgeFoundString,  asynParamInt32,    &NDPluginCalibBottomEdgeFound);
-  createParam( NDPluginCalibBottomPixelString,      asynParamInt32,    &NDPluginCalibBottomPixel);
-  createParam( NDPluginCalibVerticalCenterString,   asynParamFloat64,  &NDPluginCalibVerticalCenter);
-  createParam( NDPluginCalibVerticalSizeString,     asynParamInt32,    &NDPluginCalibVerticalSize);
-  createParam( NDPluginCalibHorizontalFoundString,  asynParamInt32,    &NDPluginCalibHorizontalFound);
-  createParam( NDPluginCalibLeftEdgeFoundString,    asynParamInt32,    &NDPluginCalibLeftEdgeFound);
-  createParam( NDPluginCalibLeftPixelString,        asynParamInt32,    &NDPluginCalibLeftPixel);
-  createParam( NDPluginCalibRightEdgeFoundString,   asynParamInt32,    &NDPluginCalibRightEdgeFound);
-  createParam( NDPluginCalibRightPixelString,       asynParamInt32,    &NDPluginCalibRightPixel);
-  createParam( NDPluginCalibHorizontalCenterString, asynParamFloat64,  &NDPluginCalibHorizontalCenter);
-  createParam( NDPluginCalibHorizontalSizeString,   asynParamInt32,    &NDPluginCalibHorizontalSize);
+  createParam( NDPluginCalibFitX_aString,           asynParamFloat64,  &NDPluginCalibFitX_a);     
+  createParam( NDPluginCalibFitX_bString,           asynParamFloat64,  &NDPluginCalibFitX_b);     
+  createParam( NDPluginCalibFitY_aString,           asynParamFloat64,  &NDPluginCalibFitY_a);     
+  createParam( NDPluginCalibFitY_bString,           asynParamFloat64,  &NDPluginCalibFitY_b);     
+  createParam( NDPluginCalibMiddlePointXString,     asynParamFloat64,  &NDPluginCalibMiddlePointX);
+  createParam( NDPluginCalibMiddlePointYString,     asynParamFloat64,  &NDPluginCalibMiddlePointY);
+
 
 
   /* Set the plugin type string */

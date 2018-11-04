@@ -1,6 +1,12 @@
 #ifndef NDPluginCalib_H
 #define NDPluginCalib_H
 
+#include <epicsTypes.h>
+#include <asynStandardInterfaces.h>
+
+#include <vector>
+#include <opencv2/opencv.hpp>
+
 #include "NDPluginDriver.h"
 
 #define CALIB_VERSION      1
@@ -10,21 +16,15 @@
 /* Output data type */
 #define NDPluginCalibLowThresholdString       "LOW_THRESHOLD"     /* (asynFloat32, r/w) Canny sensitivity                      */
 #define NDPluginCalibThresholdRatioString     "THRESHOLD_RATIO"   /* (asynFloat32, r/w) low threshold * ratio = high threshold   */
-#define NDPluginCalibVerticalFoundString      "VERTICAL_FOUND"    /* (asynInt32,   r/o) 1 we found it, 0 not                      */
-#define NDPluginCalibTopEdgeFoundString       "TOP_CALIB_FOUND"    /* (asynInt32,   r/o) 1 we found it, 0 not                      */
-#define NDPluginCalibTopPixelString           "TOP_PIXEL"         /* (asynInt32,   r/o) index of pixel or -1 if not found        */
-#define NDPluginCalibBottomEdgeFoundString    "BOTTOM_CALIB_FOUND" /* (asynInt32,   r/o) 1 we found it, 0 not                      */
-#define NDPluginCalibBottomPixelString        "BOTTOM_PIXEL"      /* (asynInt32,   r/o) index of pixel or -1 if not found        */
-#define NDPluginCalibVerticalCenterString     "VERTICAL_CENTER"   /* (asynFloat64, r/o) average of vertical positions            */
-#define NDPluginCalibVerticalSizeString       "VERTICAL_SIZE"     /* (asynInt32,   r/o) Differance between top and bottom        */
-#define NDPluginCalibHorizontalFoundString    "HORIZONTAL_FOUND"  /* (asynInt32,   r/o) 1 we found it, 0 we did not              */
-#define NDPluginCalibLeftEdgeFoundString      "LEFT_CALIB_FOUND"   /* (asynInt32,   r/o) 1 of we found it, 0 if not               */
-#define NDPluginCalibLeftPixelString          "LEFT_PIXEL"        /* (asynInt32,   r/o) index of pixel (-1 if not found          */
-#define NDPluginCalibRightEdgeFoundString     "RIGHT_CALIB_FOUND"  /* (asynInt32,   r/o) 1 of we found it, 0 if not               */
-#define NDPluginCalibRightPixelString         "RIGHT_PIXEL"       /* (asynInt32,   r/o) index of pixel (-1 if not found)         */
-#define NDPluginCalibHorizontalCenterString   "HORIZONTAL_CENTER" /* (asynFloat64, r/o) average of horizontal positions          */
-#define NDPluginCalibHorizontalSizeString     "HORIZONTAL_SIZE"   /* (asynInt32,   r/o) difference between left and right        */
 
+#define NDPluginCalibFitX_aString             "FIT_RESULT_X_a"    // fit results X-direction a
+#define NDPluginCalibFitX_bString             "FIT_RESULT_X_b"    //                         b 
+#define NDPluginCalibFitY_aString             "FIT_RESULT_Y_a"    //             Y-direction a 
+#define NDPluginCalibFitY_bString             "FIT_RESULT_Y_b"    //                         b
+#define NDPluginCalibMiddlePointXString       "MIDDLE_PT_X"       // middle point after calibration x- coordinate
+#define NDPluginCalibMiddlePointYString       "MIDDLE_PT_Y"       // middle point after calibration y- coordinate
+
+static const char* pluginName = "NDPluginTransform";
 
 /** Does image processing operations.
  */
@@ -45,50 +45,23 @@ protected:
 
     /* threshold ratio (low * ratio = high, ratio is recommended to be 3)   */
     int NDPluginCalibThresholdRatio;
-
-    /* 1 if vertical edge found (top and bottom found and are different     */
-    int NDPluginCalibVerticalFound;
-
-    /* if we found a top edge                                               */
-    int NDPluginCalibTopEdgeFound;
-
-    /* first edge position from the top  (-1 for not found)                 */
-    int NDPluginCalibTopPixel;
-
-    /* if we found a bottom edge                                            */
-    int NDPluginCalibBottomEdgeFound;
-
-    /* first edge position from the bottom  (-1 for not found)              */
-    int NDPluginCalibBottomPixel;
-
-    /* average of top and bottom                                            */
-    int NDPluginCalibVerticalCenter;
-
-    /* difference between top and bottom                                    */
-    int NDPluginCalibVerticalSize;
-
-    /* 1 if horizontal edit found (left and right found and are different   */
-    int NDPluginCalibHorizontalFound;
-
-    /* 1 if left edge found                                                 */
-    int NDPluginCalibLeftEdgeFound;
-
-    /* first edge position from left (-1 for not found)                     */
-    int NDPluginCalibLeftPixel;
-
-    /* 1 if right edge found                                                */
-    int NDPluginCalibRightEdgeFound;
-
-    /* first edge position from right (-1 for not found)                    */
-    int NDPluginCalibRightPixel;
-
-    /* average of left and right positions                                  */
-    int NDPluginCalibHorizontalCenter;
-
-    /* difference between left and right positions                          */
-    int NDPluginCalibHorizontalSize;
-
+    int NDPluginCalibFitX_a;
+    int NDPluginCalibFitX_b;
+    int NDPluginCalibFitY_a;
+    int NDPluginCalibFitY_b;
+    int NDPluginCalibMiddlePointX;
+    int NDPluginCalibMiddlePointY;
+    
+    
+ 
 private:
+    size_t userDims_[ND_ARRAY_MAX_DIMS];
+    void   transformImage(NDArray *inArray, NDArray *outArray, NDArrayInfo_t *arrayInfo);
+    int    fitLinear(std::vector<float>&, std::vector<float>&, std::vector<float>&);
+    void   sortPoints(std::vector<cv::Point2f>&);
+    void   findTransformationPoints(std::vector<cv::Point2f>&, std::vector<cv::Point2f>&);
+    void   calibrate(const cv::Mat&, std::vector<float>&);
+    //void writeImageToFile();
 
 };
     
