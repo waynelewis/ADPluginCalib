@@ -13,10 +13,12 @@
 #define CALIB_REVISION     2
 #define CALIB_MODIFICATION 0
 
-/* Output data type */
+/* Input data */
 #define NDPluginCalibLowThresholdString       "LOW_THRESHOLD"     /* (asynFloat32, r/w) Canny sensitivity                      */
 #define NDPluginCalibThresholdRatioString     "THRESHOLD_RATIO"   /* (asynFloat32, r/w) low threshold * ratio = high threshold   */
+#define NDPluginCalibShowImageString          "SHOW_IMAGE"        // variable to check if the transformed picture should be displayed or not
 
+/* Output data */
 #define NDPluginCalibFitX_aString             "FIT_RESULT_X_a"    // fit results X-direction a
 #define NDPluginCalibFitX_bString             "FIT_RESULT_X_b"    //                         b 
 #define NDPluginCalibFitY_aString             "FIT_RESULT_Y_a"    //             Y-direction a 
@@ -51,10 +53,21 @@ protected:
     int NDPluginCalibFitY_b;
     int NDPluginCalibMiddlePointX;
     int NDPluginCalibMiddlePointY;
-    
+    int NDPluginCalibShowImage;    
     
  
 private:
+    double m_LowThreshold;
+    double m_ThresholdRatio;
+    double m_FitX_a;
+    double m_FitX_b;
+    double m_FitY_a;
+    double m_FitY_b;
+    double m_MiddlePointX;
+    double m_MiddlePointY;
+    int    m_ShowImage;    
+    
+
     size_t userDims_[ND_ARRAY_MAX_DIMS];
     void   transformImage(NDArray *inArray, NDArray *outArray, NDArrayInfo_t *arrayInfo);
     int    fitLinear(std::vector<float>&, std::vector<float>&, std::vector<float>&);

@@ -1134,111 +1134,48 @@ record( ai, "$(P,undefined)$(R,undefined)ThresholdRatio_RBV")
     field(INP,   "@asyn($(PORT,undefined),$(ADDR,undefined),$(TIMEOUT,undefined))THRESHOLD_RATIO")
     field(SCAN,  "I/O Intr")
 }
-record( bi, "$(P,undefined)$(R,undefined)VerticalFound")
+
+record( ai, "$(P,undefined)$(R,undefined)Xa_RBV")
 {
-    field(DTYP, "asynInt32")
-    field(INP,  "@asyn($(PORT,undefined),$(ADDR,undefined),$(TIMEOUT,undefined))VERTICAL_FOUND")
-    field(ZNAM, "No")
-    field(ONAM, "Yes")
-    field(ZSV,  "NO_ALARM")
-    field(OSV,  "MINOR")
-    field(SCAN, "I/O Intr")
+    field(DTYP,  "asynFloat64")
+    field(INP,   "@asyn($(PORT,undefined),$(ADDR,undefined),$(TIMEOUT,undefined))FIT_RESULT_X_a")
+    field(SCAN,  "I/O Intr")
 }
-record( bi, "$(P,undefined)$(R,undefined)TopEdgeFound")
+
+record( ai, "$(P,undefined)$(R,undefined)Xb_RBV")
 {
-    field(DTYP, "asynInt32")
-    field(INP,  "@asyn($(PORT,undefined),$(ADDR,undefined),$(TIMEOUT,undefined))TOP_EDGE_FOUND")
-    field(ZNAM, "No")
-    field(ONAM, "Yes")
-    field(ZSV,  "NO_ALARM")
-    field(OSV,  "MINOR")
-    field(SCAN, "I/O Intr")
+    field(DTYP,  "asynFloat64")
+    field(INP,   "@asyn($(PORT,undefined),$(ADDR,undefined),$(TIMEOUT,undefined))FIT_RESULT_X_b")
+    field(SCAN,  "I/O Intr")
 }
-record( ai, "$(P,undefined)$(R,undefined)TopPixel")
+
+record( ai, "$(P,undefined)$(R,undefined)Ya_RBV")
 {
-    field(DTYP, "asynInt32")
-    field(INP,  "@asyn($(PORT,undefined),$(ADDR,undefined),$(TIMEOUT,undefined))TOP_PIXEL")
-    field(SCAN, "I/O Intr")
+    field(DTYP,  "asynFloat64")
+    field(INP,   "@asyn($(PORT,undefined),$(ADDR,undefined),$(TIMEOUT,undefined))FIT_RESULT_Y_a")
+    field(SCAN,  "I/O Intr")
 }
-record( bi, "$(P,undefined)$(R,undefined)BottomEdgeFound")
+
+record( ai, "$(P,undefined)$(R,undefined)Yb_RBV")
 {
-    field(DTYP, "asynInt32")
-    field(INP,  "@asyn($(PORT,undefined),$(ADDR,undefined),$(TIMEOUT,undefined))BOTTOM_EDGE_FOUND")
-    field(ZNAM, "No")
-    field(ONAM, "Yes")
-    field(ZSV,  "NO_ALARM")
-    field(OSV,  "MINOR")
-    field(SCAN, "I/O Intr")
+    field(DTYP,  "asynFloat64")
+    field(INP,   "@asyn($(PORT,undefined),$(ADDR,undefined),$(TIMEOUT,undefined))FIT_RESULT_Y_b")
+    field(SCAN,  "I/O Intr")
 }
-record( ai, "$(P,undefined)$(R,undefined)BottomPixel")
+
+
+
+record( ai, "$(P,undefined)$(R,undefined)Px0_RBV")
 {
-    field(DTYP, "asynInt32")
-    field(INP,  "@asyn($(PORT,undefined),$(ADDR,undefined),$(TIMEOUT,undefined))BOTTOM_PIXEL")
-    field(SCAN, "I/O Intr")
+    field(DTYP,  "asynFloat64")
+    field(INP,   "@asyn($(PORT,undefined),$(ADDR,undefined),$(TIMEOUT,undefined))MIDDLE_PT_X")
+    field(SCAN,  "I/O Intr")
 }
-record( ai, "$(P,undefined)$(R,undefined)VerticalCenter")
+
+record( ai, "$(P,undefined)$(R,undefined)Py0_RBV")
 {
-    field(DTYP, "asynFloat64")
-    field(INP,  "@asyn($(PORT,undefined),$(ADDR,undefined),$(TIMEOUT,undefined))VERTICAL_CENTER")
-    field(SCAN, "I/O Intr")
+    field(DTYP,  "asynFloat64")
+    field(INP,   "@asyn($(PORT,undefined),$(ADDR,undefined),$(TIMEOUT,undefined))MIDDLE_PT_Y")
+    field(SCAN,  "I/O Intr")
 }
-record( ai, "$(P,undefined)$(R,undefined)VerticalSize")
-{
-    field(DTYP, "asynInt32")
-    field(INP,  "@asyn($(PORT,undefined),$(ADDR,undefined),$(TIMEOUT,undefined))VERTICAL_SIZE")
-    field(SCAN, "I/O Intr")
-}
-record( bi, "$(P,undefined)$(R,undefined)HorizontalFound")
-{
-    field(DTYP, "asynInt32")
-    field(INP,  "@asyn($(PORT,undefined),$(ADDR,undefined),$(TIMEOUT,undefined))HORIZONTAL_FOUND")
-    field(ZNAM, "No")
-    field(ONAM, "Yes")
-    field(ZSV,  "NO_ALARM")
-    field(OSV,  "MINOR")
-    field(SCAN, "I/O Intr")
-}
-record( bi, "$(P,undefined)$(R,undefined)LeftEdgeFound")
-{
-    field(DTYP, "asynInt32")
-    field(INP,  "@asyn($(PORT,undefined),$(ADDR,undefined),$(TIMEOUT,undefined))LEFT_EDGE_FOUND")
-    field(ZNAM, "No")
-    field(ONAM, "Yes")
-    field(ZSV,  "NO_ALARM")
-    field(OSV,  "MINOR")
-    field(SCAN, "I/O Intr")
-}
-record( ai, "$(P,undefined)$(R,undefined)LeftPixel")
-{
-    field(DTYP, "asynInt32")
-    field(INP,  "@asyn($(PORT,undefined),$(ADDR,undefined),$(TIMEOUT,undefined))LEFT_PIXEL")
-    field(SCAN, "I/O Intr")
-}
-record( bi, "$(P,undefined)$(R,undefined)RightEdgeFound")
-{
-    field(DTYP, "asynInt32")
-    field(INP,  "@asyn($(PORT,undefined),$(ADDR,undefined),$(TIMEOUT,undefined))RIGHT_EDGE_FOUND")
-    field(ZNAM, "No")
-    field(ONAM, "Yes")
-    field(ZSV,  "NO_ALARM")
-    field(OSV,  "MINOR")
-    field(SCAN, "I/O Intr")
-}
-record( ai, "$(P,undefined)$(R,undefined)RightPixel")
-{
-    field(DTYP, "asynInt32")
-    field(INP,  "@asyn($(PORT,undefined),$(ADDR,undefined),$(TIMEOUT,undefined))RIGHT_PIXEL")
-    field(SCAN, "I/O Intr")
-}
-record( ai, "$(P,undefined)$(R,undefined)HorizontalCenter")
-{
-    field(DTYP, "asynFloat64")
-    field(INP,  "@asyn($(PORT,undefined),$(ADDR,undefined),$(TIMEOUT,undefined))HORIZONTAL_CENTER")
-    field(SCAN, "I/O Intr")
-}
-record( ai, "$(P,undefined)$(R,undefined)HorizontalSize")
-{
-    field(DTYP, "asynInt32")
-    field(INP,  "@asyn($(PORT,undefined),$(ADDR,undefined),$(TIMEOUT,undefined))HORIZONTAL_SIZE")
-    field(SCAN, "I/O Intr")
-}
+
