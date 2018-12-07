@@ -14,8 +14,8 @@
 #define CALIB_MODIFICATION 0
 
 /* Input data */
-#define NDPluginCalibLowThresholdString       "LOW_THRESHOLD"     /* (asynFloat32, r/w) Canny sensitivity                      */
-#define NDPluginCalibThresholdRatioString     "THRESHOLD_RATIO"   /* (asynFloat32, r/w) low threshold * ratio = high threshold   */
+#define NDPluginCalibLowThresholdString       "LOW_THRESHOLD"     // (asynFloat32, r/w) Canny sensitivity                      
+#define NDPluginCalibThresholdRatioString     "THRESHOLD_RATIO"   // (asynFloat32, r/w) low threshold * ratio = high threshold   
 #define NDPluginCalibShowImageString          "SHOW_IMAGE"        // variable to check if the transformed picture should be displayed or not
 
 /* Output data */
@@ -25,6 +25,7 @@
 #define NDPluginCalibFitY_bString             "FIT_RESULT_Y_b"    //                         b
 #define NDPluginCalibMiddlePointXString       "MIDDLE_PT_X"       // middle point after calibration x- coordinate
 #define NDPluginCalibMiddlePointYString       "MIDDLE_PT_Y"       // middle point after calibration y- coordinate
+#define NDPluginCalibDoneString		      "CALIB_DONE"        // asynInt32 flag when calibration is done
 
 static const char* pluginName = "NDPluginTransform";
 
@@ -54,6 +55,7 @@ protected:
     int NDPluginCalibMiddlePointX;
     int NDPluginCalibMiddlePointY;
     int NDPluginCalibShowImage;    
+    int NDPluginCalibDone;    
     
  
 private:
@@ -66,6 +68,7 @@ private:
     double m_MiddlePointX;
     double m_MiddlePointY;
     int    m_ShowImage;    
+    int    m_CalibDone;    
     
 
     size_t userDims_[ND_ARRAY_MAX_DIMS];

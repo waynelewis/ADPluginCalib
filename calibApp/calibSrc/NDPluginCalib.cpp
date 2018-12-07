@@ -82,10 +82,6 @@ int NDPluginCalib::fitLinear(vector<float> &dX, vector<float> &dY, vector<float>
    result[0] = (-A/B);
    result[1] = (-C/B);
 
-  //cout << "A=" << A << " B=" << B << " C=" << C << endl;
-  //cout << "fit function y = a*x + b" << endl;
-  //cout << "a=" << (-A/B) << " b=" << (-C/B) << endl;
-
   return 0;
 }
 
@@ -125,7 +121,6 @@ void NDPluginCalib::sortPoints(std::vector<cv::Point2f>& points){
            minDiff = temp;
        }
   } // end for
-
  points[0] = pt1;
  points[1] = pt2;
  points[2] = pt3;
@@ -210,9 +205,7 @@ void NDPluginCalib::calibrate(const cv::Mat& slice, std::vector<float>& result){
   unsigned l1 = 0, l2 = 0;
   float bDist =  zeroData[1] - zeroData[0];
   for (unsigned i = 0; i < zeroData.size()-1; i++){
-    //cout << i << " zeroY(i)= "  << zeroY.at(i) << " " << zeroY.at(i+1) << " diff= " << diff << endl; 
     if( (zeroData[i+1] - zeroData[i] > bDist-4) and (zeroData[i] - zeroData[i+1] < bDist+4) ){
-      //dYfit.push_back(zeroData[i]);
     }
     else{
       l1 = i;
@@ -222,9 +215,7 @@ void NDPluginCalib::calibrate(const cv::Mat& slice, std::vector<float>& result){
   // now we have to the same but from back
 
   for (int i = zeroData.size()-1; i > 0; i--){
-    //cout << i << " zeroY(i)= "  << zeroY.at(i) << " " << zeroY.at(i-1) << " diff= " << diff << endl; 
     if( (zeroData[i] - zeroData[i-1] > bDist-4) and (zeroData[i] - zeroData[i-1] < bDist+4) ){
-      //dYfit.push_back(zeroY.at(i));
     }
     else{
       l2 = i;
@@ -277,9 +268,13 @@ void NDPluginCalib::processCallbacks(NDArray *pArray)
   // Call the base class method 
   NDPluginDriver::beginProcessCallbacks(pArray);
 
-  //getIntegerParam( NDPluginCalibShowImage,     &m_ShowImage);     
-  //getIntegerParam( NDPluginCalibLowThreshold,  &m_LowThreshold);     
-  //getIntegerParam( NDPluginCalibThresholdRatio,&m_ThresholdRatio);    
+  getIntegerParam( NDPluginCalibShowImage,     &m_ShowImage);     
+  getDoubleParam( NDPluginCalibLowThreshold,  &m_LowThreshold);     
+  getDoubleParam( NDPluginCalibThresholdRatio,&m_ThresholdRatio);    
+
+  cout << endl;
+  cout << "+++++    m_ShowImage = " << m_ShowImage << endl;
+  cout << "+++++    m_CalibDone = " << m_CalibDone << endl;
 
   // Create a pointer to a structure of type NDArrayInfo_t and use it to get information about the input array.
   pArray->getInfo(&arrayInfo);
@@ -309,14 +304,16 @@ void NDPluginCalib::processCallbacks(NDArray *pArray)
   //setIntegerParam(NDArraySizeZ, 0);
 
   // set values to PV
-   cout << "FitX a= "<< m_FitX_a <<"\t b= " << m_FitX_b << endl;
-   cout << "FitY a= "<< m_FitY_a <<"\t b= " << m_FitY_b << endl;
-   setDoubleParam( NDPluginCalibFitX_a,	m_FitX_a);              	
-   setDoubleParam( NDPluginCalibFitX_b,	m_FitX_b);
-   setDoubleParam( NDPluginCalibFitY_a,	m_FitY_a);
-   setDoubleParam( NDPluginCalibFitY_b,	m_FitY_b);
+   setDoubleParam( NDPluginCalibFitX_a,		m_FitX_a);              	
+   setDoubleParam( NDPluginCalibFitX_b,		m_FitX_b);
+   setDoubleParam( NDPluginCalibFitY_a,		m_FitY_a);
+   setDoubleParam( NDPluginCalibFitY_b,		m_FitY_b);
    setDoubleParam( NDPluginCalibMiddlePointX,	m_MiddlePointX);
    setDoubleParam( NDPluginCalibMiddlePointY,	m_MiddlePointY);
+   setIntegerParam( NDPluginCalibDone,		m_CalibDone);
+   
+   static int i = 0;
+   cout << "+++++    m_CalibDone = " << m_CalibDone << "\t" << i++<< endl;
 
   NDPluginDriver::endProcessCallbacks(transformedArray, false, true);
   callParamCallbacks();
@@ -399,7 +396,9 @@ void NDPluginCalib::transformImage(NDArray *inArray, NDArray *outArray, NDArrayI
   std::vector<Vec4i> hierarchy;
 
   try {
-    cv::findContours(detected_edges, contours, hierarchy, RETR_TREE, CHAIN_APPROX_SIMPLE);
+    cv::findContours(detected_edges, contours, hierarchy, RETR_CCOMP, CHAIN_APPROX_SIMPLE);
+    //   cv::findContours(detected_edges, contours, hierarchy, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
+    //   cv::findContours(detected_edges, contours, hierarchy, RETR_TREE, CHAIN_APPROX_SIMPLE);
   }
   catch( cv::Exception &e) {
     const char* err_msg = e.what();
@@ -413,7 +412,8 @@ void NDPluginCalib::transformImage(NDArray *inArray, NDArray *outArray, NDArrayI
   // ---------------------------------------------------------------------------------
   // get the biggest contour and find its corners 
   int MAX_COUNTOUR_AREA = xSize * ySize;
-  int maxAreaFound = MAX_COUNTOUR_AREA * 0.3;
+  int maxAreaFound = MAX_COUNTOUR_AREA * 0.2;
+  int found = 0; 
 
   vector<Point2f>  pageContour; 
   vector<Point2f>  approx; 
@@ -426,17 +426,23 @@ void NDPluginCalib::transformImage(NDArray *inArray, NDArray *outArray, NDArrayI
              cv::contourArea(approx) < MAX_COUNTOUR_AREA){		
              maxAreaFound = cv::contourArea(approx);		        
              pageContour = approx;
+             found = 1;
+     }
+     else{
      }
   }
 
 
+  if( found == 0)
+     return; 
+    
+
   vector<Point2f>  tPoints(4);
   sortPoints(pageContour);
+
   findTransformationPoints(pageContour, tPoints);
   // ---------------------------------------------------------------------------------
   // transform image
-  // Mat M = getPerspectiveTransform(sPoints, tPoints);
-  //cout << "tPoints=\n" << tPoints << endl;
   Mat M = getPerspectiveTransform(pageContour, tPoints);
   Mat rotated;
   warpPerspective(img, rotated, M, Size(xSize, ySize));
@@ -448,7 +454,6 @@ void NDPluginCalib::transformImage(NDArray *inArray, NDArray *outArray, NDArrayI
   m_MiddlePointX = ptc0.x; 
   m_MiddlePointY = ptc0.y; 
  
-  //cout << "ptc0.x= " << ptc0.x << " ptc0.y= " << ptc0.y << endl; 
   Mat xSlice = rotated.col(static_cast<int>(ptc0.x)).t();
   Mat ySlice = rotated.row(static_cast<int>(ptc0.y));
 
@@ -462,7 +467,10 @@ void NDPluginCalib::transformImage(NDArray *inArray, NDArray *outArray, NDArrayI
   m_FitY_a = dResultY[0];
   m_FitY_b = dResultY[1];
 
-  memcpy( outData, (unsigned char*)rotated.data, arrayInfo->nElements * sizeof(unsigned char));
+  m_CalibDone = 1;
+  
+  if(m_ShowImage)
+    memcpy( outData, (unsigned char*)rotated.data, arrayInfo->nElements * sizeof(unsigned char));
 
   } // end of NDPluginTransform::transformImag
   // ---------------------------------------------------------------------------------
@@ -509,6 +517,7 @@ NDPluginCalib::NDPluginCalib(const char *portName, int queueSize, int blockingCa
   m_MiddlePointX = 0.;
   m_MiddlePointY = 0.;
   m_ShowImage = 0;      
+  m_CalibDone = 0; 
 
   createParam( NDPluginCalibLowThresholdString,     asynParamFloat64,  &NDPluginCalibLowThreshold);
   createParam( NDPluginCalibThresholdRatioString,   asynParamFloat64,  &NDPluginCalibThresholdRatio);
@@ -519,6 +528,7 @@ NDPluginCalib::NDPluginCalib(const char *portName, int queueSize, int blockingCa
   createParam( NDPluginCalibMiddlePointXString,     asynParamFloat64,  &NDPluginCalibMiddlePointX);
   createParam( NDPluginCalibMiddlePointYString,     asynParamFloat64,  &NDPluginCalibMiddlePointY);
   createParam( NDPluginCalibShowImageString,  	    asynParamInt32,    &NDPluginCalibShowImage);
+  createParam( NDPluginCalibDoneString,  	    asynParamInt32,    &NDPluginCalibDone);
 
 
 

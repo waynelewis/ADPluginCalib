@@ -11,12 +11,34 @@ record( ao, "$(P)$(R)LowThreshold")
     field(OUT,   "@asyn($(PORT),$(ADDR),$(TIMEOUT))LOW_THRESHOLD")
     field(VAL,   "50.0")
 }
+
 record( ai, "$(P)$(R)LowThreshold_RBV")
 {
     field(DTYP,  "asynFloat64")
     field(INP,   "@asyn($(PORT),$(ADDR),$(TIMEOUT))LOW_THRESHOLD")
     field(SCAN,  "I/O Intr")
 }
+
+record( ao, "$(P)$(R)ShowImage")
+{
+    field(PINI,  "YES")
+    field(DTYP,  "asynInt32")
+    field(OUT,   "@asyn($(PORT),$(ADDR),$(TIMEOUT))SHOW_IMAGE")
+    field(VAL,   "1")
+}
+
+record( bi, "$(P)$(R)CalibDone_RBV")
+{
+    field(PINI,  "YES")
+    field(ZNAM,  "Not Calibrated")
+    field(ONAM,  "DONE")
+    field(DTYP,  "asynInt32")
+    field(INP,   "@asyn($(PORT),$(ADDR),$(TIMEOUT))CALIB_DONE")
+    field(VAL,   "0")
+    field(SCAN,  "I/O Intr")
+}
+
+
 record( ao, "$(P)$(R)ThresholdRatio")
 {
     field(PINI,  "YES")
