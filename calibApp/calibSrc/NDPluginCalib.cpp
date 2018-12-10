@@ -322,6 +322,7 @@ void NDPluginCalib::processCallbacks(NDArray *pArray)
 //===================================================================================================
 void NDPluginCalib::transformImage(NDArray *inArray, NDArray *outArray, NDArrayInfo_t *arrayInfo) {
 
+  cout << "+++++    NDPluginCalib::transformImage " << endl;
   static const char *functionName="transformImage";
 
   epicsUInt8 *inData  = (epicsUInt8 *)inArray->pData;
